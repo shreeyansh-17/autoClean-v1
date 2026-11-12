@@ -1,0 +1,25 @@
+# Frontend build output
+dist/
+dist-ssr/
+
+# Node modules
+node_modules/
+
+# Local env files
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+

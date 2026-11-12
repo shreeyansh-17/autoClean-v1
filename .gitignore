@@ -1,0 +1,44 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Node.js
+node_modules/
+frontend/node_modules/
+
+# Frontend build
+frontend/dist/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Application history and logs
+.autoclean_history.json
+*.log
+
+# Generated outputs
+*_cleaned.*
+*_report.md
+*_removed_rows.csv
+*.zip
+
+# Local application data and previous datasets
+.autoclean_history.json
+Cleaned_DS_Jobs.csv
+laptopData.csv
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
