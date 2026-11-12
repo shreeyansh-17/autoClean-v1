@@ -20,7 +20,9 @@ frontend/dist/
 # PyInstaller
 build/
 dist/
-*.spec
+# Keep the spec file and build script — needed to reproduce the build
+!autoclean.spec
+!build_windows.bat
 
 # Application history and logs
 .autoclean_history.json

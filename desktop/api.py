@@ -47,7 +47,15 @@ from autoclean.report import generate_report
 import config
 
 log = logging.getLogger("autoclean.api")
-HISTORY_FILE = Path.cwd() / ".autoclean_history.json"
+HISTORY_FILE = config.USER_DATA_DIR / "history.json"
+
+# Auto-migrate legacy history file from working directory if present
+_legacy_hist = Path.cwd() / ".autoclean_history.json"
+if _legacy_hist.exists() and not HISTORY_FILE.exists():
+    try:
+        HISTORY_FILE.write_text(_legacy_hist.read_text(encoding="utf-8"), encoding="utf-8")
+    except Exception:
+        pass
 
 
 def _sanitize_for_json(obj: Any) -> Any:
@@ -171,7 +179,30 @@ class AutoCleanAPI:
             "fallback_on_llm_failure": config.FALLBACK_ON_LLM_FAILURE,
             "has_groq_api_key": has_key,
             "masked_api_key": masked_key,
+            "user_data_dir": str(config.USER_DATA_DIR),
         }
+
+    def save_settings(self, settings: dict) -> dict:
+        """
+        Saves user-configured settings (API key, model, hyperparams) to
+        the local user-data directory and immediately applies them.
+        """
+        log.info("save_settings called")
+        if not isinstance(settings, dict):
+            return {"status": "error", "message": "Settings must be an object."}
+
+        try:
+            for k, v in settings.items():
+                if v is not None:
+                    config.update_setting(k, v)
+            return {
+                "status": "success",
+                "message": "Settings saved successfully to local user profile.",
+                "settings": self.get_settings(),
+            }
+        except Exception as e:
+            log.error("Failed to save settings: %s", e)
+            return {"status": "error", "message": str(e)}
 
     # ------------------------------------------------------------------
     # 2. Native File Picker Dialogs

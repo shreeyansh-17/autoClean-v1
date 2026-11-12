@@ -101,6 +101,17 @@ export function getSettings() {
   return callPython('get_settings')
 }
 
+export function saveSettings(settings) {
+  if (!isPyWebView()) {
+    return browserStub('save_settings', {
+      status: 'success',
+      message: 'Settings saved (browser stub)',
+      settings,
+    })
+  }
+  return callPython('save_settings', settings)
+}
+
 // ---------------------------------------------------------------------------
 // File Dialogs
 // ---------------------------------------------------------------------------

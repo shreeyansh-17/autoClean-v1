@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   SlidersHorizontal,
   Sparkles,
@@ -12,14 +12,19 @@ import {
   Check,
   Save,
   CheckCircle2,
+  AlertCircle,
+  Folder,
 } from 'lucide-react'
 import PyWebViewTest from '../components/PyWebViewTest/PyWebViewTest'
+import { getSettings, saveSettings } from '../services/pywebview'
 import styles from './SettingsPage.module.css'
 
 function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general')
   const [showApiKey, setShowApiKey] = useState(false)
-  const [apiKey, setApiKey] = useState('sk-proj-98f9a8b7c6d5e4f3a2b1...')
+  const [apiKey, setApiKey] = useState('')
+  const [maskedKey, setMaskedKey] = useState('')
+  const [hasExistingKey, setHasExistingKey] = useState(false)
   const [copied, setCopied] = useState(false)
   const [selectedAccent, setSelectedAccent] = useState('purple')
 
@@ -29,9 +34,14 @@ function SettingsPage() {
   const [bgProcessing, setBgProcessing] = useState(true)
 
   // AI settings
-  const [selectedModel, setSelectedModel] = useState('gemini-1.5-pro')
-  const [temperature, setTemperature] = useState(0.2)
+  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-20b')
+  const [temperature, setTemperature] = useState(0.1)
   const [confidence, setConfidence] = useState(0.75)
+  const [userDataDir, setUserDataDir] = useState('')
+
+  // Save feedback state
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState(null)
 
   // File defaults
   const [encoding, setEncoding] = useState('UTF-8')
@@ -39,9 +49,58 @@ function SettingsPage() {
   const [hasHeader, setHasHeader] = useState(true)
   const [skipEmpty, setSkipEmpty] = useState(true)
 
+  useEffect(() => {
+    getSettings()
+      .then((cfg) => {
+        if (cfg) {
+          if (cfg.has_groq_api_key) {
+            setHasExistingKey(true)
+            setMaskedKey(cfg.masked_api_key || 'Configured')
+          }
+          if (cfg.groq_model) setSelectedModel(cfg.groq_model)
+          if (typeof cfg.llm_temperature === 'number') setTemperature(cfg.llm_temperature)
+          if (cfg.user_data_dir) setUserDataDir(cfg.user_data_dir)
+        }
+      })
+      .catch((err) => console.warn('Could not load settings:', err))
+  }, [])
+
+  const handleSaveSettings = async () => {
+    setSaving(true)
+    setSaveMessage(null)
+    try {
+      const payload = {
+        groq_model: selectedModel,
+        llm_temperature: temperature,
+      }
+      if (apiKey.trim()) {
+        payload.groq_api_key = apiKey.trim()
+      }
+      const res = await saveSettings(payload)
+      if (res && res.status === 'success') {
+        setSaveMessage({ type: 'success', text: 'Settings saved successfully to Windows user profile.' })
+        if (apiKey.trim()) {
+          setHasExistingKey(true)
+          setMaskedKey(`${apiKey.trim().slice(0, 4)}...${apiKey.trim().slice(-4)}`)
+          setApiKey('')
+        }
+      } else {
+        setSaveMessage({ type: 'error', text: res?.message || 'Failed to save settings.' })
+      }
+    } catch (err) {
+      setSaveMessage({ type: 'error', text: err?.message || 'Error communicating with backend.' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setSaveMessage(null), 5000)
+    }
+  }
+
   const handleCopy = () => {
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    if (apiKey) {
+      navigator.clipboard?.writeText(apiKey)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   return (
@@ -181,36 +240,61 @@ function SettingsPage() {
           {/* AI CONFIG */}
           {activeTab === 'ai' && (
             <div className={styles.sectionStack}>
+              {saveMessage && (
+                <div
+                  className="card"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '12px 16px',
+                    borderColor: saveMessage.type === 'success' ? 'var(--accent-green)' : 'var(--accent-red)',
+                    backgroundColor: saveMessage.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  }}
+                >
+                  {saveMessage.type === 'success' ? (
+                    <CheckCircle2 size={18} color="var(--accent-green)" />
+                  ) : (
+                    <AlertCircle size={18} color="var(--accent-red)" />
+                  )}
+                  <span style={{ fontSize: 13, color: saveMessage.type === 'success' ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                    {saveMessage.text}
+                  </span>
+                </div>
+              )}
+
               <div className="card">
                 <h3 className={styles.cardHeading}>Model Provider & Credentials</h3>
                 <div className={styles.settingRow}>
                   <div style={{ flex: 1 }}>
-                    <div className={styles.settingLabel}>API Secret Key</div>
-                    <div className={styles.settingDesc}>
-                      Stored strictly in OS keychain or local protected storage. Never transmitted off-device.
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <div className={styles.settingLabel}>Groq API Secret Key</div>
+                      {hasExistingKey && (
+                        <span className="badge badge-green" style={{ fontSize: 11 }}>
+                          Active ({maskedKey})
+                        </span>
+                      )}
                     </div>
-                    <div className={styles.keyInputRow}>
+                    <div className={styles.settingDesc}>
+                      Configured keys are saved securely to your local Windows user profile (never embedded or shared).
+                    </div>
+                    <div className={styles.keyInputRow} style={{ marginTop: 8 }}>
                       <input
                         type={showApiKey ? 'text' : 'password'}
                         value={apiKey}
+                        placeholder={hasExistingKey ? 'Enter new key to update (starts with gsk_)' : 'Enter Groq API Key (gsk_...)'}
                         onChange={(e) => setApiKey(e.target.value)}
                         className={styles.keyInput}
                       />
                       <button
                         className="btn btn-secondary"
                         onClick={() => setShowApiKey(!showApiKey)}
+                        title="Toggle visibility"
                       >
                         {showApiKey ? (
                           <EyeOff size={14} strokeWidth={1.75} />
                         ) : (
                           <Eye size={14} strokeWidth={1.75} />
-                        )}
-                      </button>
-                      <button className="btn btn-secondary" onClick={handleCopy}>
-                        {copied ? (
-                          <Check size={14} strokeWidth={1.75} color="var(--accent-green)" />
-                        ) : (
-                          <Copy size={14} strokeWidth={1.75} />
                         )}
                       </button>
                     </div>
@@ -219,18 +303,18 @@ function SettingsPage() {
 
                 <div className={styles.settingRow}>
                   <div>
-                    <div className={styles.settingLabel}>Active LLM Reasoning Model</div>
-                    <div className={styles.settingDesc}>Select the model used for recommendation generation.</div>
+                    <div className={styles.settingLabel}>Active Groq Reasoning Model</div>
+                    <div className={styles.settingDesc}>Select the model used for recommendation generation and schema repair.</div>
                   </div>
                   <select
                     value={selectedModel}
                     onChange={(e) => setSelectedModel(e.target.value)}
                     className={styles.selectInput}
                   >
-                    <option value="gemini-1.5-pro">Gemini 1.5 Pro (Recommended)</option>
-                    <option value="gemini-1.5-flash">Gemini 1.5 Flash (High Speed)</option>
-                    <option value="gpt-4o">OpenAI GPT-4o</option>
-                    <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                    <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (Recommended)</option>
+                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (High Quality)</option>
+                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Fastest)</option>
+                    <option value="mixtral-8x7b-32768">mixtral-8x7b-32768 (MoE)</option>
                   </select>
                 </div>
               </div>
@@ -274,6 +358,18 @@ function SettingsPage() {
                     />
                   </div>
                 </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSaveSettings}
+                  disabled={saving}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 20px' }}
+                >
+                  <Save size={16} strokeWidth={2} />
+                  <span>{saving ? 'Saving...' : 'Save Settings'}</span>
+                </button>
               </div>
             </div>
           )}
@@ -409,6 +505,11 @@ function SettingsPage() {
                   <div><strong>Desktop Bridge:</strong> PyWebView 6.x</div>
                   <div><strong>Iconography:</strong> Lucide React (Clean Outline System)</div>
                   <div><strong>License:</strong> MIT Open Source</div>
+                  {userDataDir && (
+                    <div style={{ wordBreak: 'break-all' }}>
+                      <strong>User Data & Logs:</strong> <code>{userDataDir}</code>
+                    </div>
+                  )}
                 </div>
               </div>
 

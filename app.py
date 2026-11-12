@@ -23,17 +23,42 @@ from pathlib import Path
 
 import webview
 
+import config
 from desktop.api import AutoCleanAPI
 
 # ---------------------------------------------------------------------------
-# Logging
+# Logging (writes to both console and %LOCALAPPDATA%\AutoClean\autoclean.log)
 # ---------------------------------------------------------------------------
+log_file = config.USER_DATA_DIR / "autoclean.log"
+handlers: list[logging.Handler] = []
+try:
+    file_handler = logging.FileHandler(str(log_file), encoding="utf-8", mode="a")
+    file_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
+    handlers.append(file_handler)
+except Exception:
+    pass
+
+if sys.stdout is not None:
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s — %(message)s"))
+    handlers.append(console_handler)
+
 logging.basicConfig(
     level=logging.INFO,
+    handlers=handlers or None,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("autoclean.app")
+
+# ---------------------------------------------------------------------------
+# Base path resolution (works for standard Python & PyInstaller frozen bundles)
+# ---------------------------------------------------------------------------
+if getattr(sys, "frozen", False):
+    # PyInstaller creates a temporary folder or extracts files in sys._MEIPASS
+    BASE_DIR = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+else:
+    BASE_DIR = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -44,7 +69,7 @@ APP_HEIGHT = 800
 MIN_WIDTH = 900
 MIN_HEIGHT = 600
 DEV_SERVER_URL = "http://localhost:5173"
-DIST_DIR = Path(__file__).parent / "frontend" / "dist"
+DIST_DIR = BASE_DIR / "frontend" / "dist"
 _DEV_SERVER_TIMEOUT = 30  # seconds to wait for Vite to be ready
 
 
@@ -80,6 +105,20 @@ def _assert_dist_exists() -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # If invoked with --cli or cli subcommand, route to Typer CLI
+    if "--cli" in sys.argv or (len(sys.argv) > 1 and sys.argv[1] in ("clean", "cli")):
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                ctypes.windll.kernel32.AttachConsole(-1)
+            except Exception:
+                pass
+        import cli
+        cli_args = [arg for arg in sys.argv[1:] if arg not in ("--cli", "cli")]
+        sys.argv = [sys.argv[0]] + cli_args
+        cli.app()
+        return
+
     parser = argparse.ArgumentParser(
         prog="autoclean-desktop",
         description="AutoClean — native desktop application powered by PyWebView.",
