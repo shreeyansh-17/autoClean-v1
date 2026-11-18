@@ -203,6 +203,7 @@ This script automatically:
 BUILD SUCCESSFUL!
 Distribution Folder: ...\dist\AutoClean
 Application Binary:  ...\dist\AutoClean\AutoClean.exe
+Release Zip Package: ...\dist\AutoClean-Windows-x64.zip (~38 MB)
 ```
 
 ### Manual build (alternative)

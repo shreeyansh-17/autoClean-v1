@@ -51,10 +51,20 @@ if %errorlevel% neq 0 (
 
 REM 6. Validate Output
 echo.
-echo [4/4] Verifying generated distribution...
+echo [4/5] Verifying generated distribution...
 if not exist "%ROOT_DIR%dist\AutoClean\AutoClean.exe" (
     echo [ERROR] Expected binary dist\AutoClean\AutoClean.exe was not found.
     exit /b 1
+)
+
+REM 7. Create Portable Zip Archive (<50MB distribution package)
+echo.
+echo [5/5] Creating release ZIP archive for GitHub...
+"%ROOT_DIR%.venv\Scripts\python.exe" -c "import shutil; shutil.make_archive('dist/AutoClean-Windows-x64', 'zip', 'dist/AutoClean')"
+if not exist "%ROOT_DIR%dist\AutoClean-Windows-x64.zip" (
+    echo [WARNING] Zip archive creation failed.
+) else (
+    echo [OK] Created dist\AutoClean-Windows-x64.zip
 )
 
 echo.
@@ -63,6 +73,7 @@ echo  BUILD SUCCESSFUL!
 echo =====================================================================
 echo  Distribution Folder: %ROOT_DIR%dist\AutoClean
 echo  Application Binary:  %ROOT_DIR%dist\AutoClean\AutoClean.exe
+echo  Release Zip Package: %ROOT_DIR%dist\AutoClean-Windows-x64.zip
 echo.
 echo  To run the desktop application:
 echo    "%ROOT_DIR%dist\AutoClean\AutoClean.exe"
